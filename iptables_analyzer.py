@@ -4,6 +4,7 @@ import subprocess
 import re
 import datetime
 import json
+import argparse
 
 
 version = 0.2
@@ -18,8 +19,9 @@ def parse_from_line(string):
 			output.append(item)
 	return (output[0], output[1])
 
-def process_honeypots():
-	print "ACTIVE HONEYPOT PORTS:"
+def process_honeypots(verbose=0):
+	if verbose > 0:
+		print "ACTIVE HONEYPOT PORTS:"
 	chains = subprocess.Popen('iptables -vnL -t nat', shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE).communicate()
 	input_list = chains[0].split("Chain")
 	hp_ports = []
@@ -47,7 +49,8 @@ def process_honeypots():
 							packets = data[0]
 							#get amount of bytes
 							bytes = data[1]
-							print "\tPORT: {}, REDIRECTED TO: {}, PROTOCOL: {} (pkts: {}, bytes: {})".format(rule[9], rule[10], rule[3], packets, bytes)
+							if verbose > 0:
+								print "\tPORT: {}, REDIRECTED TO: {}, PROTOCOL: {} (pkts: {}, bytes: {})".format(rule[9], rule[10], rule[3], packets, bytes)
 							hp_ports.append(rule[9])
 	return hp_ports
 						
@@ -97,14 +100,16 @@ def parse_chain(chain):
 			return {'name':name, 'headers':headers, 'rules':data}
 		else:
 			return None
-def process_production_ports():
-	print "\nACTIVE PRODUCTION PORTS:"
+def process_production_ports(verbose=0):
+	if verbose > 0:
+		print "\nACTIVE PRODUCTION PORTS:"
 	production_ports = []
 	chains = subprocess.Popen('iptables -vnL -t nat | grep DNAT', shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE).communicate()
 	rules = parse_DNAT_chain(chains[0])
 	if rules: #check if there exists at elast one rule
 		for rule in rules:
-			print "\tPORT: {}, REDIRECTED TO: {}, PROTOCOL: {} (pkts: {}, bytes: {})".format(rule[10], rule[11], rule[3], rule[0], rule[1])
+			if verbose > 0:
+				print "\tPORT: {}, REDIRECTED TO: {}, PROTOCOL: {} (pkts: {}, bytes: {})".format(rule[10], rule[11], rule[3], rule[0], rule[1])
 			production_ports.append(rule[10])
 	return production_ports
 	
@@ -133,8 +138,9 @@ def parse_DNAT_chain(chain):
 		return None
 
 
-def process_accepted_ports():
-	print "\nACCEPTED PORTS:"
+def process_accepted_ports(verbose=0):
+	if verbose > 0:
+		print "\nACCEPTED PORTS:"
 	accepted_ports = []
 	chains = subprocess.Popen('iptables -vnL -t filter', shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE).communicate()
 	input_list = chains[0].split("Chain")
@@ -144,21 +150,33 @@ def process_accepted_ports():
 			if "zone_wan_input" in parsed['name']:
 				for rule in parsed["rules"]:
 					if rule[2] == "accept" and len(rule) > 9:
-						print "\tPORT: {},PROTOCOL: {} (pkts: {}, bytes: {})".format(rule[-1], rule[3], rule[0], rule[1])
+						if verbose > 0:
+							print "\tPORT: {},PROTOCOL: {} (pkts: {}, bytes: {})".format(rule[-1], rule[3], rule[0], rule[1])
 						accepted_ports.append(rule[-1])
 	return accepted_ports
 
 if __name__ == '__main__':
-	print "IPTables Analyzer (version {}) started at {}\n".format(version, datetime.datetime.now())
+
+	parser = argparse.ArgumentParser()
+	parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', default=0, required=False, type=int)
+	parser.add_argument('-f', '--folder', help='Path to the target folder.', action='store', default='/etc/LUDUS/', required=False, type=str)
+	parser.add_argument('-n', '--filename', help='Name of the output file.', action='store', default='ports_type', required=False, type=str)
+	
+
+	args = parser.parse_args()
+	if args.verbose > 1:
+		print "IPTables Analyzer (version {}) started at {}\n".format(version, datetime.datetime.now())
 	output = {}
 	#get data from Honeypots
-	for port in process_honeypots():
+	for port in process_honeypots(args.verbose):
 		output[port] = 'honeypot-turris'
 	#get data from production ports (ports being redirected to the locat network)
-	for port in process_production_ports():
+	for port in process_production_ports(args.verbose):
 		output[port] = 'production'
 	#get data from accepted ports
-	for port in process_accepted_ports():
+	for port in process_accepted_ports(args.verbose):
 		output[port] = 'accepted'
-	with open('ports_type.json', 'w') as outfile:
+	with open(args.folder+args.filename+'.json', 'w') as outfile:
 		json.dump(output, outfile)
+	if args.verbose > 1:
+		print "Results stored in '{}'.".format(args.folder+args.filename+'.json')
