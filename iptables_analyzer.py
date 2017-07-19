@@ -3,6 +3,7 @@
 #Author: Ondrej Lukas - ondrej.lukas95@gmail.com, lukasond@fel.cvut.cz
 import subprocess
 import re
+import datetime
 
 
 """
@@ -137,6 +138,7 @@ def process_accepted_ports():
 					if rule[2] == "accept" and len(rule) > 9:
 						print "\tPORT: {},PROTOCOL: {} (pkts: {}, bytes: {})".format(rule[-1], rule[3], rule[0], rule[1])
 if __name__ == '__main__':
+	print "IP Tables Analyzer started at {}".format(datetime.datetime())
 	#get data from Honeypots
 	process_honeypots()
 	#get data from production ports (ports being redirected to the locat network)
