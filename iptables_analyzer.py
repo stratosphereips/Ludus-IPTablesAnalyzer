@@ -1,11 +1,12 @@
 #!/usr/bin/python
-#Version 0.2
 #Author: Ondrej Lukas - ondrej.lukas95@gmail.com, lukasond@fel.cvut.cz
 import subprocess
 import re
 import datetime
+import json
 
 
+version = 0.2
 """
 	Extracts amount of bytes and packets in mangle table
 """
@@ -21,7 +22,7 @@ def process_honeypots():
 	print "ACTIVE HONEYPOT PORTS:"
 	chains = subprocess.Popen('iptables -vnL -t nat', shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE).communicate()
 	input_list = chains[0].split("Chain")
-
+	hp_ports = []
 
 	for item in input_list:
 		parsed = parse_chain(item)
@@ -47,6 +48,8 @@ def process_honeypots():
 							#get amount of bytes
 							bytes = data[1]
 							print "\tPORT: {}, REDIRECTED TO: {}, PROTOCOL: {} (pkts: {}, bytes: {})".format(rule[9], rule[10], rule[3], packets, bytes)
+							hp_ports.append(rule[9])
+	return hp_ports
 						
 
 """
@@ -96,11 +99,15 @@ def parse_chain(chain):
 			return None
 def process_production_ports():
 	print "\nACTIVE PRODUCTION PORTS:"
+	production_ports = []
 	chains = subprocess.Popen('iptables -vnL -t nat | grep DNAT', shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE).communicate()
 	rules = parse_DNAT_chain(chains[0])
-	for rule in rules:
-		print "\tPORT: {}, REDIRECTED TO: {}, PROTOCOL: {} (pkts: {}, bytes: {})".format(rule[10], rule[11], rule[3], rule[0], rule[1])
-
+	if rules: #check if there exists at elast one rule
+		for rule in rules:
+			print "\tPORT: {}, REDIRECTED TO: {}, PROTOCOL: {} (pkts: {}, bytes: {})".format(rule[10], rule[11], rule[3], rule[0], rule[1])
+			production_ports.append(rule[10])
+	return production_ports
+	
 def parse_DNAT_chain(chain):
 	#check if not empty
 	if len(chain) > 0:
@@ -128,6 +135,7 @@ def parse_DNAT_chain(chain):
 
 def process_accepted_ports():
 	print "\nACCEPTED PORTS:"
+	accepted_ports = []
 	chains = subprocess.Popen('iptables -vnL -t filter', shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE).communicate()
 	input_list = chains[0].split("Chain")
 	for item in input_list:
@@ -137,16 +145,20 @@ def process_accepted_ports():
 				for rule in parsed["rules"]:
 					if rule[2] == "accept" and len(rule) > 9:
 						print "\tPORT: {},PROTOCOL: {} (pkts: {}, bytes: {})".format(rule[-1], rule[3], rule[0], rule[1])
+						accepted_ports.append(rule[-1])
+	return accepted_ports
+
 if __name__ == '__main__':
-	print "IP Tables Analyzer started at {}".format(datetime.datetime())
+	print "IPTables Analyzer (version {}) started at {}\n".format(version, datetime.datetime.now())
+	output = {}
 	#get data from Honeypots
-	process_honeypots()
+	for port in process_honeypots():
+		output[port] = 'honeypot-turris'
 	#get data from production ports (ports being redirected to the locat network)
-	process_production_ports()
+	for port in process_production_ports():
+		output[port] = 'production'
 	#get data from accepted ports
-	process_accepted_ports()
-	
-	
-
-
-
+	for port in process_accepted_ports():
+		output[port] = 'accepted'
+	with open('ports_type.json', 'w') as outfile:
+		json.dump(output, outfile)
