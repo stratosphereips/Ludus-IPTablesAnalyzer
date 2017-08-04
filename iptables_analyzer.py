@@ -159,7 +159,7 @@ if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument('-v', '--verbose', help='Amount of verbosity. This shows more info about the results.', action='store', default=0, required=False, type=int)
-	parser.add_argument('-f', '--folder', help='Path to the target folder.', action='store', default='/etc/LUDUS/', required=False, type=str)
+	parser.add_argument('-f', '--folder', help='Path to the target folder.', action='store', default='/etc/ludus/', required=False, type=str)
 	parser.add_argument('-n', '--filename', help='Name of the output file.', action='store', default='ports_type', required=False, type=str)
 	
 
